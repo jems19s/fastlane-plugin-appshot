@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
   spec.metadata["rubygems_mfa_required"] = "true"
   spec.metadata["source_code_uri"] = "https://github.com/jems19s/fastlane-plugin-appshot"
   spec.metadata["bug_tracker_uri"] = "https://github.com/jems19s/fastlane-plugin-appshot/issues"
-  spec.required_ruby_version = ">= 3.0"
+  spec.required_ruby_version = ">= 3.1"
 
   # Don't add a dependency to fastlane or fastlane_re
   # since this would cause a circular dependency

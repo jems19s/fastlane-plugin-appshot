@@ -1,5 +1,5 @@
 AllCops:
-  TargetRubyVersion: 3.0
+  TargetRubyVersion: 3.1
   NewCops: enable
   SuggestExtensions: false
   Exclude:
@@ -24,3 +24,6 @@ Naming/PredicateName:
 
 Metrics:
   Enabled: false
+
+Style/HashSyntax:
+  EnforcedShorthandSyntax: either
