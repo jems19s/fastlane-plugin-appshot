@@ -8,13 +8,22 @@ describe Fastlane::Actions::AppshotAction do
   let(:fake_appshot) { File.join(project, "fake-appshot") }
   let(:render_log) { File.join(project, "render.log") }
 
-  # Stands in for the appshot binary: answers --version and, on render, writes one PNG per locale and slot
-  # whose content names the asset it was made from, so tests can tell which capture ended up where.
+  # Stands in for the appshot binary: answers --version and, on render, writes one PNG per locale and slot at the
+  # app's output size, with a text chunk naming the asset it was made from, so tests can tell which capture ended
+  # up where and deliver's size check sees real dimensions.
   let(:fake_appshot_source) do
     <<~RUBY
       #!/usr/bin/env ruby
       require 'json'
       require 'fileutils'
+      require 'zlib'
+      def png(width, height, text)
+        chunk = ->(type, data) { [data.bytesize].pack("N") + type + data + [Zlib.crc32(type + data)].pack("N") }
+        rows = ("\\x00".b + "\\x00".b * (width * 3)) * height
+        "\\x89PNG\\r\\n\\x1a\\n".b + chunk.call("IHDR", [width, height, 8, 2, 0, 0, 0].pack("NNCCCCC")) +
+          chunk.call("tEXt", "Comment\\x00".b + text.b) + chunk.call("IDAT", Zlib::Deflate.deflate(rows)) +
+          chunk.call("IEND", "".b)
+      end
       if ARGV == ["--version"]
         puts "1.3.0"
         exit 0
@@ -29,7 +38,8 @@ describe Fastlane::Actions::AppshotAction do
         config["slots"].each do |slot|
           localized_asset = File.join(root, "apps", app, "assets", locale, slot["screenshot"])
           asset = File.exist?(localized_asset) ? localized_asset : File.join(root, "apps", app, "assets", slot["screenshot"])
-          File.write(File.join(root, "output", app, locale, slot["name"] + ".png"), "framed " + File.read(asset))
+          File.binwrite(File.join(root, "output", app, locale, slot["name"] + ".png"),
+                        png(config["output"]["width"], config["output"]["height"], "framed " + File.read(asset)))
         end
       end
     RUBY
@@ -38,6 +48,7 @@ describe Fastlane::Actions::AppshotAction do
   before do
     FileUtils.mkdir_p(File.join(studio, "apps", "plants", "assets"))
     config = {
+      "output" => { "width" => 1320, "height" => 2868 },
       "locales" => %w[en-US de-DE],
       "slots" => [
         { "name" => "01-home", "screenshot" => "home.png", "caption" => "home" },
@@ -59,6 +70,13 @@ describe Fastlane::Actions::AppshotAction do
     File.write(File.join(raw_screenshots, locale, file), content)
   end
 
+  def rendered_from(path)
+    png = File.binread(path)
+    text_chunk_start = png.index("tEXt".b)
+    text_length = png[text_chunk_start - 4, 4].unpack1("N")
+    png[text_chunk_start + 4, text_length].delete_prefix("Comment\x00".b).force_encoding(Encoding::UTF_8)
+  end
+
   def run_action(options = {})
     described_class.run(FastlaneCore::Configuration.create(described_class.available_options,
                                                            { studio: studio, appshot_path: fake_appshot,
@@ -75,8 +93,8 @@ describe Fastlane::Actions::AppshotAction do
 
     expect(File.read(File.join(studio, "apps", "plants", "assets", "de-DE", "care.png")))
       .to eq("de-DE iPhone 17 Pro Max-care.png")
-    expect(File.read(File.join(output_directory, "de-DE",
-                               "02-care.png"))).to eq("framed de-DE iPhone 17 Pro Max-care.png")
+    expect(rendered_from(File.join(output_directory, "de-DE", "02-care.png")))
+      .to eq("framed de-DE iPhone 17 Pro Max-care.png")
     expect(copied_paths_by_locale.keys).to eq(%w[en-US de-DE])
     expect(copied_paths_by_locale["en-US"]).to eq([File.join(output_directory, "en-US", "01-home.png"),
                                                    File.join(output_directory, "en-US", "02-care.png")])
@@ -86,7 +104,7 @@ describe Fastlane::Actions::AppshotAction do
   it "renders the studio's own screenshots when there are no raw captures" do
     run_action
 
-    expect(File.read(File.join(output_directory, "en-US", "01-home.png"))).to eq("framed studio home.png")
+    expect(rendered_from(File.join(output_directory, "en-US", "01-home.png"))).to eq("framed studio home.png")
   end
 
   it "keeps the studio's screenshots for a locale snapshot didn't capture" do
@@ -96,7 +114,7 @@ describe Fastlane::Actions::AppshotAction do
 
     run_action(raw_screenshots: raw_screenshots)
 
-    expect(File.read(File.join(output_directory, "de-DE", "01-home.png"))).to eq("framed studio home.png")
+    expect(rendered_from(File.join(output_directory, "de-DE", "01-home.png"))).to eq("framed studio home.png")
   end
 
   it "matches simulator names that contain hyphens" do
@@ -104,8 +122,8 @@ describe Fastlane::Actions::AppshotAction do
 
     run_action(raw_screenshots: raw_screenshots, locales: ["en-US"])
 
-    expect(File.read(File.join(output_directory, "en-US",
-                               "01-home.png"))).to eq("framed en-US iPad Pro 13-inch (M4)-home.png")
+    expect(rendered_from(File.join(output_directory, "en-US", "01-home.png")))
+      .to eq("framed en-US iPad Pro 13-inch (M4)-home.png")
   end
 
   it "asks for a device when captures from several simulators match" do
@@ -122,8 +140,23 @@ describe Fastlane::Actions::AppshotAction do
 
     run_action(raw_screenshots: raw_screenshots, device: "iPad Pro 13-inch (M4)", locales: ["en-US"])
 
-    expect(File.read(File.join(output_directory, "en-US",
-                               "01-home.png"))).to eq("framed en-US iPad Pro 13-inch (M4)-home.png")
+    expect(rendered_from(File.join(output_directory, "en-US", "01-home.png")))
+      .to eq("framed en-US iPad Pro 13-inch (M4)-home.png")
+  end
+
+  it "leaves screenshots deliver can't upload, such as iPhone Duo ones, in the studio" do
+    config_path = File.join(studio, "apps", "plants", "config.json")
+    config = JSON.parse(File.read(config_path))
+    File.write(config_path, JSON.generate(config.merge("output" => { "width" => 2853, "height" => 2007 })))
+    allow(Fastlane::UI).to receive(:important)
+
+    copied_paths_by_locale = run_action
+
+    expect(copied_paths_by_locale).to eq({ "en-US" => [], "de-DE" => [] })
+    expect(Dir.exist?(output_directory)).to be(false)
+    expect(File.exist?(File.join(studio, "output", "plants", "de-DE", "02-care.png"))).to be(true)
+    expect(Fastlane::UI).to have_received(:important)
+      .with(/deliver can't upload 2853×2007 screenshots yet .* upload them in App Store Connect/).once
   end
 
   it "refuses to read raw captures from the folder deliver uploads" do

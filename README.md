@@ -50,6 +50,10 @@ If snapshot runs on several simulators, say which one appshot frames with `devic
 
 snapshot writes to `fastlane/screenshots` by default — the folder `deliver` uploads. Point it somewhere else (`output_directory("./fastlane/raw_screenshots")` in the Snapfile, or the `capture_screenshots` option above), or `deliver` uploads raw and framed images side by side. The action refuses to read and write the same folder, and warns about any other PNGs it finds where it copies.
 
+### iPhone Duo
+
+appshot 1.4 renders iPhone Duo screenshots ([how to set up the Duo frame](https://github.com/jems19s/appshot-studio#iphone-duo)), but deliver can't upload them yet: App Store Connect takes Duo screenshots only through its new asset library. The action checks every image against deliver's own list of supported sizes and leaves the ones deliver can't upload in the studio's `output/` folder, saying so, for you to upload in App Store Connect.
+
 ## Options
 
 | Key | Default | Description |

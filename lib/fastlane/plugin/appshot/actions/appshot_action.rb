@@ -43,7 +43,8 @@ module Fastlane
           locales: locales,
           slots: slots
         )
-        UI.success("Copied #{copied_paths_by_locale.values.sum(&:count)} screenshots into #{output_directory}")
+        copied_count = copied_paths_by_locale.values.sum(&:count)
+        UI.success("Copied #{copied_count} screenshots into #{output_directory}") if copied_count.positive?
         copied_paths_by_locale
       end
 
@@ -56,7 +57,8 @@ module Fastlane
       end
 
       def self.return_value
-        "A hash of locale => paths of the framed screenshots copied into output_directory"
+        "A hash of locale => paths of the framed screenshots copied into output_directory " \
+          "(screenshots deliver can't upload, such as iPhone Duo ones, stay in the studio and are not listed)"
       end
 
       def self.details

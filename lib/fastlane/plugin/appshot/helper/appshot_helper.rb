@@ -95,23 +95,43 @@ module Fastlane
       end
 
       def self.copy_renders(rendered_folder:, output_directory:, locales:, slots:)
+        require "deliver"
         rendered_files = slots.map { |slot| "#{slot.fetch('name')}.png" }
-        locales.to_h do |locale|
-          destination_folder = File.join(output_directory, locale)
-          FileUtils.mkdir_p(destination_folder)
-          other_files = Dir.children(destination_folder).select { |file|
-            file.downcase.end_with?(".png")
-          } - rendered_files
-          unless other_files.empty?
-            UI.important("deliver uploads every PNG in #{destination_folder}, " \
-                         "so these go up too: #{other_files.sort.join(', ')}")
+        sizes_deliver_cannot_upload = []
+        copied_paths_by_locale = locales.to_h do |locale|
+          uploadable_files = rendered_files.select do |file|
+            rendered_path = File.join(rendered_folder, locale, file)
+            next true if Deliver::AppScreenshot.calculate_display_type(rendered_path)
+
+            sizes_deliver_cannot_upload << FastImage.size(rendered_path).join("×")
+            false
           end
-          copied_paths = rendered_files.map do |file|
-            destination = File.join(destination_folder, file)
-            FileUtils.cp(File.join(rendered_folder, locale, file), destination)
-            destination
-          end
+          copied_paths = copy_into_deliver_folder(uploadable_files,
+                                                  rendered_locale_folder: File.join(rendered_folder, locale),
+                                                  destination_folder: File.join(output_directory, locale))
           [locale, copied_paths]
+        end
+        unless sizes_deliver_cannot_upload.empty?
+          UI.important("deliver can't upload #{sizes_deliver_cannot_upload.uniq.join(', ')} screenshots yet " \
+                       "(such as the iPhone Duo's), so they stay in #{rendered_folder}: " \
+                       "upload them in App Store Connect")
+        end
+        copied_paths_by_locale
+      end
+
+      def self.copy_into_deliver_folder(files, rendered_locale_folder:, destination_folder:)
+        return [] if files.empty?
+
+        FileUtils.mkdir_p(destination_folder)
+        other_files = Dir.children(destination_folder).select { |file| file.downcase.end_with?(".png") } - files
+        unless other_files.empty?
+          UI.important("deliver uploads every PNG in #{destination_folder}, " \
+                       "so these go up too: #{other_files.sort.join(', ')}")
+        end
+        files.map do |file|
+          destination = File.join(destination_folder, file)
+          FileUtils.cp(File.join(rendered_locale_folder, file), destination)
+          destination
         end
       end
     end
