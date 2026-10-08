@@ -12,11 +12,12 @@ Gem::Specification.new do |spec|
   spec.homepage      = "https://github.com/jems19s/fastlane-plugin-appshot"
   spec.license       = "MIT"
 
-  spec.files         = Dir["lib/**/*"] + %w[README.md LICENSE]
+  spec.files         = Dir["lib/**/*"] + %w[README.md LICENSE CHANGELOG.md]
   spec.require_paths = ["lib"]
   spec.metadata["rubygems_mfa_required"] = "true"
   spec.metadata["source_code_uri"] = "https://github.com/jems19s/fastlane-plugin-appshot"
   spec.metadata["bug_tracker_uri"] = "https://github.com/jems19s/fastlane-plugin-appshot/issues"
+  spec.metadata["changelog_uri"] = "https://github.com/jems19s/fastlane-plugin-appshot/blob/main/CHANGELOG.md"
   spec.required_ruby_version = ">= 3.1"
 
   # Don't add a dependency to fastlane or fastlane_re
