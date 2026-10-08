@@ -1,0 +1,4 @@
+lane :screenshots do
+  capture_screenshots(output_directory: "fastlane/raw_screenshots")
+  appshot(raw_screenshots: "fastlane/raw_screenshots")
+end

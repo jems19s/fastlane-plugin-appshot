@@ -1,0 +1,26 @@
+AllCops:
+  TargetRubyVersion: 3.0
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - vendor/**/*
+
+Layout/LineLength:
+  Max: 120
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+# fastlane calls is_supported? on every action.
+Naming/PredicateName:
+  Exclude:
+    - lib/fastlane/plugin/appshot/actions/*.rb
+
+Metrics:
+  Enabled: false
